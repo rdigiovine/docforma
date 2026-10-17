@@ -25,6 +25,28 @@ jobs:
         run: |
           cp README.md content
           jupyter lite build --contents content --output-dir dist
+      
+      - name: Inject kernel status reporter
+        run: |
+          python - <<'EOF'
+          from pathlib import Path
+
+          script = """
+          <script>
+          parent.postMessage({ type: 'hello' }, '*');
+          </script>
+          """
+
+          targets = list(Path('dist').rglob('index.html'))
+          print(f'Found {len(targets)} index.html files')
+          for p in targets:
+              html = p.read_text()
+              if '</body>' in html:
+                  p.write_text(html.replace('</body>', script + '</body>'))
+                  print(f'  injected: {p}')
+              else:
+                  print(f'  SKIPPED (no body tag): {p}')
+          EOF
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
