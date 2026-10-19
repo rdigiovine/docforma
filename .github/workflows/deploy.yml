@@ -33,7 +33,36 @@ jobs:
 
           script = """
           <script>
-          parent.postMessage({ type: 'hello' }, '*');
+          (function () {
+            if (parent === self) return;
+            var sawBusy = false, timer = null;
+            function check() {
+              var el = document.querySelector('[data-jp-item-name="kernelStatus"]');
+              if (!el) return;
+              var svg = el.querySelector('svg');
+              var icon = (svg && svg.dataset.icon) || '';
+              var idle = icon.indexOf('circle-empty') !== -1;
+              if (!idle) {
+                sawBusy = true;
+                clearTimeout(timer);
+              } else if (sawBusy) {
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                  sawBusy = false;
+                  parent.postMessage({ type: 'kernel', state: 'idle' }, '*');
+                }, 400);
+              }
+            }
+            var wait = setInterval(function () {
+              if (!document.querySelector('[data-jp-item-name="kernelStatus"]')) return;
+              clearInterval(wait);
+              parent.postMessage({ type: 'kernel', state: 'ready' }, '*');
+              new MutationObserver(check).observe(document.body, {
+                subtree: true, childList: true,
+                attributes: true, attributeFilter: ['data-icon', 'title']
+              });
+            }, 100);
+          })();
           </script>
           """
 
