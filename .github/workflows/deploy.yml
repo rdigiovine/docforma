@@ -35,36 +35,54 @@ jobs:
           <script>
           (function () {
             if (parent === self) return;
-            var sawBusy = false, timer = null;
+          
+            var TARGET = new URLSearchParams(location.search).get('parentOrigin') || '*';
+            var SEL = '[data-jp-item-name="kernelStatus"]';
+            var statusEl = null, sawBusy = false, timer = null, busyAt = 0;
+          
+            function send(state, extra) {
+              var msg = { type: 'kernel', state: state };
+              if (extra) for (var k in extra) msg[k] = extra[k];
+              try { parent.postMessage(msg, TARGET); } catch (e) {}
+            }
+          
             function check() {
-              var el = document.querySelector('[data-jp-item-name="kernelStatus"]');
-              if (!el) return;
-              var svg = el.querySelector('svg');
-              var icon = (svg && svg.dataset.icon) || '';
-              var idle = icon.indexOf('circle-empty') !== -1;
+              if (!statusEl || !statusEl.isConnected) {
+                statusEl = document.querySelector(SEL);
+                if (!statusEl) return;
+              }
+              var svg = statusEl.querySelector('svg');
+              var idle = (((svg && svg.dataset.icon) || '').indexOf('circle-empty') !== -1);
+          
               if (!idle) {
-                sawBusy = true;
+                if (!sawBusy) { sawBusy = true; busyAt = Date.now(); send('busy'); }
                 clearTimeout(timer);
               } else if (sawBusy) {
                 clearTimeout(timer);
                 timer = setTimeout(function () {
                   sawBusy = false;
-                  parent.postMessage({ type: 'kernel', state: 'idle' }, '*');
+                  send('idle', { durationMs: Date.now() - busyAt });
                 }, 400);
               }
             }
-            // var wait = setInterval(function () {
-            //   if (!document.querySelector('[data-jp-item-name="kernelStatus"]')) return;
+          
             var tries = 0;
             var wait = setInterval(function () {
-              if (++tries > 600) { clearInterval(wait); return; }
-              if (!document.querySelector('[data-jp-item-name="kernelStatus"]')) return;
+              statusEl = document.querySelector(SEL);
+              if (!statusEl) {
+                if (++tries > 600) {
+                  clearInterval(wait);
+                  send('error', { reason: 'status-item-not-found' });
+                }
+                return;
+              }
               clearInterval(wait);
-              parent.postMessage({ type: 'kernel', state: 'ready' }, '*');
-              new MutationObserver(check).observe(document.body, {
-                subtree: true, childList: true,
-                attributes: true, attributeFilter: ['data-icon', 'title']
-              });
+              send('ready');
+              new MutationObserver(check).observe(
+                document.getElementById('jp-main-statusbar') || document.body,
+                { subtree: true, childList: true,
+                  attributes: true, attributeFilter: ['data-icon', 'title'] }
+              );
             }, 100);
           })();
           </script>
