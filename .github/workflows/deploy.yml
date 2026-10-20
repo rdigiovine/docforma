@@ -53,7 +53,11 @@ jobs:
                 }, 400);
               }
             }
+            // var wait = setInterval(function () {
+            //   if (!document.querySelector('[data-jp-item-name="kernelStatus"]')) return;
+            var tries = 0;
             var wait = setInterval(function () {
+              if (++tries > 600) { clearInterval(wait); return; }
               if (!document.querySelector('[data-jp-item-name="kernelStatus"]')) return;
               clearInterval(wait);
               parent.postMessage({ type: 'kernel', state: 'ready' }, '*');
@@ -66,7 +70,8 @@ jobs:
           </script>
           """
 
-          targets = list(Path('dist').rglob('index.html'))
+          # targets = list(Path('dist').rglob('index.html'))
+          targets = [p for p in Path('dist').rglob('index.html') if 'repl' in p.parts]
           print(f'Found {len(targets)} index.html files')
           for p in targets:
               html = p.read_text()
